@@ -2,6 +2,8 @@
 
 This directory contains profiling scripts for analyzing the performance of PyTorch inference benchmarks using various ROCm profiling tools.
 
+**Compatible with ROCm 6.x and 7.x** - Scripts automatically detect ROCm version and handle different output formats.
+
 ## Overview
 
 All scripts are configured to profile **ResNet50** with:
@@ -20,14 +22,18 @@ python micro_benchmarking_pytorch.py --network resnet50 --batch-size 64 --iterat
 **Purpose:** Captures detailed GPU hardware metrics and kernel execution statistics
 
 **Features:**
+- Automatically detects ROCm version (6.x or 7.x)
 - Collects hardware counter data for all GPU kernels
-- Includes `analyze_kernel_trace.py` for automatic analysis
+- Automatic analysis with appropriate tool:
+  - ROCm 6.x: `analyze_kernel_trace.py` (CSV format)
+  - ROCm 7.x: `analyze_rocpd_db.py` (SQLite database)
 - Shows kernel execution statistics and performance hotspots
 - Identifies top time-consuming kernels
 
 **Output:**
 - `profiling_results/counters_<timestamp>/` directory
-- `kernel_trace.csv` with detailed kernel metrics
+- ROCm 6.x: `kernel_trace.csv` with detailed kernel metrics
+- ROCm 7.x: `*_results.db` SQLite database with comprehensive profiling data
 - Automated analysis summary showing:
   - Kernel execution counts
   - Total/average/min/max durations
@@ -194,13 +200,37 @@ Available networks include: `alexnet`, `densenet121`, `inception_v3`, `resnet50`
 
 ## Requirements
 
-- ROCm 6.4.4 or later
-- AMD GPU (tested on RX 7900 XTX / gfx1100)
+- **ROCm 6.x or 7.x** (tested with 6.4.4 and 7.0)
+- AMD GPU (tested on RX 7900 XTX / gfx1100 and MI300)
 - Profiling tools installed:
   - `rocprofv3`
   - `rocprof-compute`
   - `rocprof-sys`
 - Python 3 with PyTorch (ROCm build)
+- SQLite3 (for ROCm 7.x database analysis)
+
+---
+
+## ROCm Version Differences
+
+### ROCm 6.x Output Format
+- **CSV files**: `kernel_trace.csv`, `agent_info.csv`
+- **Analysis tool**: `analyze_kernel_trace.py`
+- **Performance**: May use naive convolution kernels (slower)
+
+### ROCm 7.x Output Format
+- **SQLite database**: `*_results.db` (single database file)
+- **Analysis tool**: `analyze_rocpd_db.py`
+- **Performance**: Uses optimized MLIR-generated kernels (faster)
+- **Tables**: UUID-suffixed table names (e.g., `rocpd_kernel_dispatch_<UUID>`)
+
+### Example Performance Comparison (ResNet50)
+```
+ROCm 6.x: ~90-140 seconds GPU time (naive kernels dominate 98%+)
+ROCm 7.x: ~1.2 seconds GPU time (optimized MLIR kernels)
+```
+
+The `get_counters.sh` script automatically detects the ROCm version and uses the appropriate analysis tool.
 
 ---
 
@@ -238,5 +268,6 @@ chmod +x get_*.sh
 ## Related Files
 
 - `README.md` - Main documentation for inference_benchmark
-- `analyze_kernel_trace.py` - Kernel trace analysis script (auto-created by `get_counters.sh`)
+- `analyze_kernel_trace.py` - ROCm 6.x CSV analysis script (auto-created by `get_counters.sh`)
+- `analyze_rocpd_db.py` - ROCm 7.x SQLite database analysis script
 - `micro_benchmarking_pytorch.py` - Main benchmark script
