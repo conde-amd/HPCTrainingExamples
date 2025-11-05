@@ -1,8 +1,43 @@
 #!/bin/bash
 # Script to profile inference_benchmark with rocprofv3 kernel trace and hardware counters
 # This captures detailed GPU hardware metrics for performance analysis
+#
+# Supports both ROCm 6.x (CSV output) and ROCm 7.x (SQLite database output)
 
 set -e
+
+# Detect ROCm version
+ROCM_VERSION=""
+ROCM_MAJOR=""
+
+# Method 1: Check rocminfo
+if command -v rocminfo &> /dev/null; then
+    ROCM_VERSION=$(rocminfo | grep -i "ROCm Version" | head -1 | awk '{print $3}')
+fi
+
+# Method 2: Check ROCM_PATH
+if [ -z "$ROCM_VERSION" ] && [ -n "$ROCM_PATH" ]; then
+    if [ -f "$ROCM_PATH/.info/version" ]; then
+        ROCM_VERSION=$(cat "$ROCM_PATH/.info/version")
+    fi
+fi
+
+# Method 3: Check hipcc version (more reliable for module-loaded ROCm)
+if [ -z "$ROCM_VERSION" ] && command -v hipcc &> /dev/null; then
+    HIP_VERSION=$(hipcc --version 2>/dev/null | grep -i "HIP version" | head -1 | awk '{print $3}')
+    if [ -n "$HIP_VERSION" ]; then
+        ROCM_VERSION="$HIP_VERSION"
+    fi
+fi
+
+# Extract major version
+if [ -n "$ROCM_VERSION" ]; then
+    ROCM_MAJOR=$(echo "$ROCM_VERSION" | cut -d. -f1)
+    echo "Detected ROCm version: $ROCM_VERSION"
+else
+    echo "Warning: Could not detect ROCm version, assuming ROCm 7.x"
+    ROCM_MAJOR="7"
+fi
 
 # Create output directory with timestamp
 OUTPUT_DIR="profiling_results/counters_$(date +%Y%m%d_%H%M%S)"
@@ -25,7 +60,7 @@ echo ""
 echo "Profiling complete! Results saved to: $OUTPUT_DIR"
 echo ""
 echo "Generated files:"
-ls -lh "$OUTPUT_DIR"
+ls -lh "$OUTPUT_DIR"/*/ 2>/dev/null || ls -lh "$OUTPUT_DIR"
 echo ""
 
 # Check if analyze script exists, if not create it
@@ -145,6 +180,33 @@ EOF
     chmod +x analyze_kernel_trace.py
 fi
 
-# Run analysis
-echo "Running analysis on kernel trace..."
-python analyze_kernel_trace.py "$OUTPUT_DIR"
+# Run analysis based on ROCm version
+echo "Running analysis on profiling results..."
+if [ "$ROCM_MAJOR" = "7" ] || [ -n "$(find "$OUTPUT_DIR" -name "*.db" 2>/dev/null)" ]; then
+    echo "Detected ROCm 7.x SQLite database format"
+    DB_FILE=$(find "$OUTPUT_DIR" -name "*_results.db" | head -1)
+    if [ -n "$DB_FILE" ]; then
+        echo "Database file: $DB_FILE"
+        echo ""
+
+        # Run Python analysis if script exists
+        if [ -f "analyze_rocpd_db.py" ]; then
+            python analyze_rocpd_db.py "$DB_FILE"
+        else
+            echo "Note: analyze_rocpd_db.py not found. Manual analysis:"
+            echo "  sqlite3 $DB_FILE"
+            echo ""
+            echo "Example query:"
+            echo "  SELECT s.string AS kernel_name, COUNT(*) as count,"
+            echo "         AVG(kd.end_timestamp - kd.start_timestamp) as avg_duration_ns"
+            echo "  FROM rocpd_kernel_dispatch kd"
+            echo "  JOIN rocpd_string s ON kd.kernel_id = s.id"
+            echo "  GROUP BY kernel_name ORDER BY avg_duration_ns DESC LIMIT 20;"
+        fi
+    else
+        echo "No database file found in $OUTPUT_DIR"
+    fi
+else
+    echo "Detected ROCm 6.x CSV format"
+    python analyze_kernel_trace.py "$OUTPUT_DIR"
+fi

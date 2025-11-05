@@ -2,6 +2,8 @@
 # Script to profile inference_benchmark with rocprof-sys
 # This captures system-level performance with call stack sampling
 #
+# Compatible with ROCm 6.x and 7.x
+#
 # NOTE: rocprof-sys may produce memory map dumps in some configurations
 # This is a known issue tracked in GitHub. If profiling fails or produces
 # excessive output, consider using rocprofv3 or rocprof-compute instead.

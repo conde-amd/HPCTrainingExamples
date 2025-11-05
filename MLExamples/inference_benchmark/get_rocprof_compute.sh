@@ -1,6 +1,8 @@
 #!/bin/bash
 # Script to profile inference_benchmark with rocprof-compute
 # This captures detailed GPU hardware metrics and compute performance analysis
+#
+# Compatible with ROCm 6.x and 7.x
 
 set -e
 
