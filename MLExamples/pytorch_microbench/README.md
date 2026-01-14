@@ -1,77 +1,175 @@
-# pytorch-micro-benchmarking
-We supply a small microbenchmarking script for PyTorch training on ROCm.
+# ML Example: PyTorch Micro-Benchmarking with ROCm Profiling
 
-To execute:
-`python micro_benchmarking_pytorch.py --network <network name> [--batch-size <batch size> ] [--iterations <number of iterations>] [--fp16 <0 or 1> ] [--distributed_dataparallel] [--device_ids <comma separated list (no spaces) of GPU indices (0-indexed) to run distributed_dataparallel api on>] `
+README.md from `HPCTrainingExamples/MLExamples/pytorch_microbench` from the Training Examples repository.
 
-Possible network names are: `alexnet`, `densenet121`, `inception_v3`, `resnet50`, `resnet101`, `SqueezeNet`, `vgg16` etc.
+In this example we provide a PyTorch micro-benchmarking tool for measuring GPU throughput on AMD GPUs. The benchmark runs forward and backward passes on various CNN architectures, measuring images processed per second. This workload is useful for establishing baseline GPU performance and for learning ROCm profiling tools. Several profiling scripts are provided to capture different aspects of GPU performance, from high-level API traces to detailed hardware metrics.
 
-Default are 10 training iterations, `fp16` off (i.e., 0), and a batch size of 64.
+## Features of the profiling scripts
 
-For mGPU runs, use one of the following methods.
-- `torchrun`: It will spawn multiple sub-processes for each of the GPUs and adjust `world_size` and `rank` accordingly. `torchrun` also defaults to using distributed dataparallel.
-- `--distributed_dataparallel`: Uses torch.nn.parallel.DistributedDataParallel to run multiple processes/node. However, the script only launches one process per GPU, multiple processes need to be launched manually. See example below.
-  
-_NOTE_: `--distributed_dataparallel` option will be deprecated in the future as this path can be exercised now with `torchrun`.
-_NOTE_: If comparing `--distributed_dataprallel` performance with `torchrun` one, you need to multiply the `--batch-size` with number of nodes in the `torchrun` command. `torchrun` will split the batch size into mini batches that run on each of the nodes. `--distributed_dataparallel` doesn't do that automatically, it run with whatever the user provides.
+The pytorch_microbench example contains several profiling scripts that capture different aspects of GPU performance:
 
-Examples: 
-- for a 1-GPU resnet50 run:
+- **get_trace.sh**: Runtime trace collection using rocprofv3. Captures HIP/HSA API calls, kernel execution timeline, memory operations (H2D, D2H, D2D transfers), and synchronization events. Output is a Perfetto trace file for timeline visualization.
+- **get_counters.sh**: Kernel trace collection using rocprofv3. Captures kernel execution statistics including timing and call counts. Useful for identifying hotspot kernels and their execution patterns.
+- **get_rocprof_compute.sh**: Detailed GPU hardware metrics using rocprof-compute. Provides comprehensive performance analysis including compute utilization, memory bandwidth, and hardware counter data.
+- **get_rocprof_sys.sh**: System-level profiling using rocprof-sys. Captures call stack sampling and system-level performance data for end-to-end analysis.
+
+## Overview of the benchmark
+
+The benchmark is controlled with the following arguments:
+
+- `--network <name>`: neural network architecture to benchmark (alexnet, densenet121, inception_v3, resnet50, resnet101, SqueezeNet, vgg16, etc.)
+- `--batch-size <N>`: batch size for forward/backward passes (default: 64)
+- `--iterations <N>`: number of iterations to run (default: 10)
+- `--fp16 <0|1>`: enable FP16 precision (default: 0, disabled)
+- `--compile`: enable PyTorch 2.0 torch.compile optimizations
+- `--compileContext <dict>`: compilation options as Python dict string
+- `--distributed_dataparallel`: use DistributedDataParallel for multi-GPU
+- `--device_ids <ids>`: comma-separated GPU indices for distributed runs
+
+## Running the micro-benchmark
+
+Load the required modules:
+
 ```
-python3 micro_benchmarking_pytorch.py --network resnet50
+module load pytorch rocm
 ```
 
-- for a 2-GPU run on a single node using `torchrun`:
+Run a basic micro-benchmark with ResNet50:
+
 ```
+echo "Running ResNet50 micro-benchmark"
+python micro_benchmarking_pytorch.py --network resnet50 --batch-size 64 --iterations 10
+```
+
+Note the throughput reported in images/second. This measures the combined forward and backward pass performance.
+
+For multi-GPU runs using torchrun (recommended):
+
+```
+echo "Running 2-GPU micro-benchmark with torchrun"
 torchrun --nproc-per-node 2 micro_benchmarking_pytorch.py --network resnet50 --batch-size 128
-
 ```
 
-- for a 2-GPU run on a single node using `--distributed_dataparallel`:
+For PyTorch 2.0 compilation:
+
 ```
-python3 micro_benchmarking_pytorch.py --device_ids=0 --network resnet50 --distributed_dataparallel --rank 0 --world-size 2 --dist-backend nccl --dist-url tcp://127.0.0.1:4332 --batch-size 64 &
-python3 micro_benchmarking_pytorch.py --device_ids=1 --network resnet50 --distributed_dataparallel --rank 1 --world-size 2 --dist-backend nccl --dist-url tcp://127.0.0.1:4332 --batch-size 64 &
-```
-
-
-To run FlopsProfiler (with deepspeed.profiling.flops_profiler imported):
-`python micro_benchmarking_pytorch.py --network resnet50 --amp-opt-level=2 --batch-size=256 --iterations=20 --flops-prof-step 10`
-
-## Performance tuning
-If performance on a specific card and/or model is found to be lacking, typically some gains can be made by tuning MIOpen. For this, `export MIOPEN_FIND_ENFORCE=3` prior to running the model. This will take some time if untuned configurations are encountered and write to a local performance database. More information on this can be found in the [MIOpen documentation](https://rocm.github.io/MIOpen/doc/html/perfdatabase.html).
-
-## PyTorch 2.0
-Added the `--compile` option opens up PyTorch 2.0 capabilities, which comes with several options. Here are some notes from upstream: 
-```
-    Optimizes given model/function using TorchDynamo and specified backend.
-
-    Args:
-       model (Callable): Module/function to optimize
-       fullgraph (bool): Whether it is ok to break model into several subgraphs
-       dynamic (bool): Use dynamic shape tracing
-       backend (str or Callable): backend to be used
-       mode (str): Can be either "default", "reduce-overhead" or "max-autotune"
-       options (dict): A dictionary of options to pass to the backend.
-       disable (bool): Turn torch.compile() into a no-op for testing
-
-    Example::
-
-        @torch.compile(options={"matmul-padding": True}, fullgraph=True)
-        def foo(x):
-            return torch.sin(x) + torch.cos(x)
+echo "Running with torch.compile max-autotune"
+python micro_benchmarking_pytorch.py --network resnet50 --compile --compileContext "{'mode': 'max-autotune'}"
 ```
 
-With the required `--compile` option, these additional options are now available from the command line with the `--compileContext` flag. Here are a few examples:
+## Runtime Trace Profiling with get_trace.sh
 
-```bash
-python micro_benchmarking_pytorch.py --network resnet50 --compile # default run
+This script captures GPU API calls, kernel launches, and memory operations for timeline analysis.
+
+Run the profiling script:
+
+```
+echo "Collecting runtime trace with rocprofv3"
+./get_trace.sh
 ```
 
-```bash
-python micro_benchmarking_pytorch.py --network resnet50 --compile --compileContext "{'mode': 'max-autotune', 'fullgraph': 'True'}"
+The script will output results to `profiling_results/trace_<timestamp>/`. To analyze the results:
+
+```
+echo "Opening trace in Perfetto UI"
+echo "Visit https://ui.perfetto.dev/ and open the .pftrace file"
 ```
 
-```bash
-python micro_benchmarking_pytorch.py --network resnet50 --compile --compileContext "{'options': {'static-memory': 'True', 'matmul-padding': 'True'}}"
+If a `.db` file is generated instead (ROCm 7.x without --output-format):
+
 ```
-Note: you cannot pass the `mode` and `options` options together.
+echo "Converting database to Perfetto format"
+rocpd2pftrace -i <db_file> -o trace.pftrace
+```
+
+<!-- Example output placeholder: Perfetto timeline screenshot showing kernel execution -->
+
+## Kernel Trace Profiling with get_counters.sh
+
+This script collects kernel execution statistics including timing and call counts.
+
+Run the profiling script:
+
+```
+echo "Collecting kernel trace with rocprofv3"
+./get_counters.sh
+```
+
+The script will output results to `profiling_results/counters_<timestamp>/`. To analyze the results:
+
+```
+echo "Exporting kernel statistics to CSV"
+rocpd2csv -i <db_file> -o kernel_stats.csv
+```
+
+```
+echo "Getting kernel summary"
+rocpd summary -i <db_file> --region-categories KERNEL
+```
+
+Documentation for rocpd tools: https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/develop/how-to/using-rocpd-output-format.html
+
+<!-- Example output placeholder: Kernel summary table showing top kernels by execution time -->
+
+## GPU Hardware Metrics with get_rocprof_compute.sh
+
+This script collects detailed GPU performance metrics for hardware utilization analysis.
+
+Run the profiling script:
+
+```
+echo "Collecting GPU hardware metrics with rocprof-compute"
+./get_rocprof_compute.sh
+```
+
+The script will output results to `profiling_results/rocprof_compute_<timestamp>/`. To analyze the results:
+
+```
+echo "Generating performance analysis report"
+rocprof-compute analyze -p <output_dir>/workloads/<workload_name>/rocprof --dispatch <N> -n microbench_dispatch
+```
+
+For available analysis options:
+
+```
+rocprof-compute analyze --help
+```
+
+<!-- Example output placeholder: rocprof-compute analysis report sections -->
+
+## System-Level Profiling with get_rocprof_sys.sh
+
+This script captures system-level performance with call stack sampling.
+
+Run the profiling script:
+
+```
+echo "Collecting system-level profile with rocprof-sys"
+./get_rocprof_sys.sh
+```
+
+The script will output results to `profiling_results/rocprof_sys_<timestamp>/`. To analyze the results:
+
+```
+echo "Opening trace in Perfetto UI"
+echo "Visit https://ui.perfetto.dev/ and open the .proto file"
+```
+
+<!-- Example output placeholder: Perfetto system trace screenshot -->
+
+## Performance Tuning
+
+For optimal performance on specific hardware, tune MIOpen by setting the environment variable before running:
+
+```
+export MIOPEN_FIND_ENFORCE=3
+python micro_benchmarking_pytorch.py --network resnet50
+```
+
+This writes to a local performance database. See [MIOpen documentation](https://rocm.github.io/MIOpen/doc/html/perfdatabase.html) for details.
+
+## Additional Resources
+
+- rocprofv3 documentation: https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/develop/how-to/using-rocprofv3.html
+- rocpd output format: https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/develop/how-to/using-rocpd-output-format.html
+- Perfetto UI: https://ui.perfetto.dev/
