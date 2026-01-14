@@ -7,7 +7,7 @@
 set -e
 
 echo "=========================================="
-echo "rocprofv3 Hotspots Analysis - Version 4"
+echo "rocprofv3 Hotspots Analysis - TinyTransformer V4"
 echo "=========================================="
 echo ""
 
