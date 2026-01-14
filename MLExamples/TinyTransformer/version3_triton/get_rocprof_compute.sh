@@ -3,11 +3,14 @@
 # Get detailed GPU metrics using rocprof-compute
 # Compatible with ROCm 6.x and 7.x
 #
+# Note: rocprof-compute requires data center GPUs (MI100, MI200, MI300 series)
+# for full hardware counter support. Consumer GPUs may have limited counter availability.
+#
 
 set -e
 
 echo "=========================================="
-echo "rocprof-compute Profiling - Version 3"
+echo "rocprof-compute Profiling - TinyTransformer V3"
 echo "=========================================="
 echo ""
 
@@ -18,7 +21,6 @@ echo "Output directory: $OUTPUT_DIR"
 echo ""
 
 # Run with rocprof-compute to collect detailed GPU metrics
-# rocprof-compute requires: profile mode --name <workload_name> -d <dir> -- <command>
 WORKLOAD_NAME="tiny_llama_v3_$(date +%Y%m%d_%H%M%S)"
 echo "Running: rocprof-compute profile --name $WORKLOAD_NAME -d $OUTPUT_DIR -- python tiny_llama_v3.py --batch-size 8 --seq-len 128 --num-steps 10"
 echo ""
@@ -36,15 +38,12 @@ fi
 echo ""
 
 echo "Generated files:"
-find "$OUTPUT_DIR" -type f -ls
+find "$OUTPUT_DIR" -type f -ls | head -20
 echo ""
 
-echo "rocprof-compute provides detailed GPU performance analysis:"
-echo "  - Kernel execution timeline"
-echo "  - Memory transfer analysis"
-echo "  - Hardware counter metrics"
-echo "  - Occupancy statistics"
+echo "To analyze results:"
+echo "  rocprof-compute analyze -p $OUTPUT_DIR/workloads/$WORKLOAD_NAME/rocprof --dispatch <N> -n tiny_llama_dispatch"
 echo ""
-
-echo "To view results, check the output directory for CSV and report files."
+echo "For available analysis options:"
+echo "  rocprof-compute analyze --help"
 echo ""

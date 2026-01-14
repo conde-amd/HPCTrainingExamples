@@ -3,11 +3,14 @@
 # Get system-level profiling using rocprof-sys
 # Compatible with ROCm 6.x and 7.x
 #
+# NOTE: rocprof-sys may produce memory map dumps in some configurations.
+# Issue reference: TBD
+#
 
 set -e
 
 echo "=========================================="
-echo "rocprof-sys Profiling - Version 3"
+echo "rocprof-sys Profiling - TinyTransformer V3"
 echo "=========================================="
 echo ""
 
@@ -18,7 +21,6 @@ echo "Output directory: $OUTPUT_DIR"
 echo ""
 
 # Run with rocprof-sys to collect system-level traces
-# rocprof-sys-run provides call-stack sampling and system-level profiling
 echo "Running: rocprof-sys-run --profile --trace -- python tiny_llama_v3.py --batch-size 8 --seq-len 128 --num-steps 10"
 echo ""
 
@@ -39,13 +41,6 @@ echo "Generated files:"
 find . -type f -ls | head -20
 echo ""
 
-echo "rocprof-sys provides system-level profiling:"
-echo "  - Call stack sampling"
-echo "  - System trace timeline"
-echo "  - CPU and GPU activity correlation"
-echo "  - Function-level performance breakdown"
-echo ""
-
-echo "To view results, check for .perfetto-trace or .proto files"
-echo "Perfetto traces can be viewed at: https://ui.perfetto.dev/"
+echo "To analyze results:"
+echo "  Open the .proto file in Perfetto UI: https://ui.perfetto.dev/"
 echo ""
