@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to profile inference_benchmark with rocprofv3 runtime trace
+# Script to profile pytorch_microbench with rocprofv3 runtime trace
 # This captures GPU API calls, kernel launches, and memory operations
 #
 # Compatible with ROCm 6.x and 7.x
@@ -43,7 +43,7 @@ fi
 OUTPUT_DIR="profiling_results/trace_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUTPUT_DIR"
 
-echo "Starting rocprofv3 runtime trace profiling for inference_benchmark..."
+echo "Starting rocprofv3 runtime trace profiling for pytorch_microbench..."
 echo "Output directory: $OUTPUT_DIR"
 
 # Build rocprofv3 command with appropriate flags for ROCm version

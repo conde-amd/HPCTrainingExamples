@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to profile inference_benchmark with rocprof-compute
+# Script to profile pytorch_microbench with rocprof-compute
 # This captures detailed GPU hardware metrics and compute performance analysis
 #
 # Compatible with ROCm 6.x and 7.x
@@ -11,9 +11,9 @@ OUTPUT_DIR="profiling_results/rocprof_compute_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUTPUT_DIR"
 
 # Generate unique workload name with timestamp
-WORKLOAD_NAME="inference_benchmark_resnet50_$(date +%Y%m%d_%H%M%S)"
+WORKLOAD_NAME="pytorch_microbench_resnet50_$(date +%Y%m%d_%H%M%S)"
 
-echo "Starting rocprof-compute profiling for inference_benchmark..."
+echo "Starting rocprof-compute profiling for pytorch_microbench..."
 echo "Workload name: $WORKLOAD_NAME"
 echo "Output directory: $OUTPUT_DIR"
 
@@ -33,6 +33,8 @@ echo ""
 echo "Generated files:"
 ls -lh "$OUTPUT_DIR"
 echo ""
-echo "To analyze results, use rocprof-compute analyze tools:"
+echo "To analyze results:"
+echo "  rocprof-compute analyze -p $OUTPUT_DIR/workloads/${WORKLOAD_NAME}/rocprof --dispatch <N> -n inference_dispatch"
+echo ""
+echo "For help on analysis options:"
 echo "  rocprof-compute analyze --help"
-echo "  rocprof-compute analyze --workload-dir $OUTPUT_DIR"
