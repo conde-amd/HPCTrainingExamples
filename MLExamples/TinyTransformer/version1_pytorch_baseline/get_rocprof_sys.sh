@@ -3,9 +3,8 @@
 # Get system-level profiling using rocprof-sys
 # Compatible with ROCm 6.x and 7.x
 #
-# NOTE: rocprof-sys may produce memory map dumps in some configurations
-# This is a known issue tracked in GitHub. If profiling fails or produces
-# excessive output, consider using rocprofv3 or rocprof-compute instead.
+# NOTE: rocprof-sys may produce memory map dumps in some configurations.
+# Issue reference: TBD
 #
 
 set -e
@@ -43,13 +42,6 @@ echo "Generated files:"
 find . -type f -ls | head -20
 echo ""
 
-echo "rocprof-sys provides system-level profiling:"
-echo "  - Call stack sampling"
-echo "  - System trace timeline"
-echo "  - CPU and GPU activity correlation"
-echo "  - Function-level performance breakdown"
-echo ""
-
-echo "To view results, check for .perfetto-trace or .proto files"
-echo "Perfetto traces can be viewed at: https://ui.perfetto.dev/"
+echo "To analyze results:"
+echo "  Open the .proto file in Perfetto UI: https://ui.perfetto.dev/"
 echo ""

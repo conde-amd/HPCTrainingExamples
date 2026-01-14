@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to profile inference_benchmark with rocprofv3 runtime trace
+# Script to profile TinyTransformer with rocprofv3 runtime trace
 # This captures GPU API calls, kernel launches, and memory operations
 #
 # Compatible with ROCm 6.x and 7.x

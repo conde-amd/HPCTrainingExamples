@@ -1,6 +1,6 @@
 #!/bin/bash
-# Script to profile inference_benchmark with rocprofv3 kernel trace and hardware counters
-# This captures detailed GPU hardware metrics for performance analysis
+# Script to profile TinyTransformer with rocprofv3 kernel trace
+# This captures kernel execution metrics for performance analysis
 #
 # Supports both ROCm 6.x (CSV output) and ROCm 7.x (SQLite database output)
 
@@ -37,4 +37,42 @@ if [ -n "$ROCM_VERSION" ]; then
 else
     echo "Warning: Could not detect ROCm version, assuming ROCm 7.x"
     ROCM_MAJOR="7"
+fi
+
+# Create output directory with timestamp
+OUTPUT_DIR="./counters/counter_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$OUTPUT_DIR"
+
+echo "Starting rocprofv3 kernel trace collection for TinyTransformer..."
+echo "Output directory: $OUTPUT_DIR"
+
+# Run with rocprofv3 to collect kernel trace
+rocprofv3 \
+    --kernel-trace \
+    --output-directory "$OUTPUT_DIR" \
+    -- python tiny_llama_v1.py \
+    --batch-size 8 \
+    --seq-len 128 \
+    --num-steps 10
+
+echo ""
+echo "Profiling complete! Results saved to: $OUTPUT_DIR"
+echo ""
+echo "Generated files:"
+ls -lh "$OUTPUT_DIR"/*/ 2>/dev/null || ls -lh "$OUTPUT_DIR"
+echo ""
+
+# Analyze results based on ROCm version
+echo "To analyze results:"
+DB_FILE=$(find "$OUTPUT_DIR" -name "*_results.db" 2>/dev/null | head -1)
+if [ -n "$DB_FILE" ]; then
+    echo "  Database file: $DB_FILE"
+    echo ""
+    echo "  Export to CSV:"
+    echo "    rocpd2csv -i $DB_FILE -o kernel_stats.csv"
+    echo ""
+    echo "  Get kernel summary:"
+    echo "    rocpd summary -i $DB_FILE --region-categories KERNEL"
+else
+    echo "  Check $OUTPUT_DIR for output files"
 fi
