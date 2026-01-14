@@ -41,6 +41,21 @@ echo "Running ResNet50 micro-benchmark"
 python micro_benchmarking_pytorch.py --network resnet50 --batch-size 64 --iterations 10
 ```
 
+Example output (Radeon RX 7900 XTX, ROCm 6.4):
+
+```
+INFO: running forward and backward for warmup.
+INFO: running the benchmark..
+OK: finished running benchmark..
+--------------------SUMMARY--------------------------
+Microbenchmark for network : resnet50
+Num devices: 1
+Dtype: FP32
+Mini batch size [img] : 64
+Time per mini-batch : 0.177
+Throughput [img/sec] : 360.74
+```
+
 Note the throughput reported in images/second. This measures the combined forward and backward pass performance.
 
 For multi-GPU runs using torchrun (recommended):
@@ -75,14 +90,40 @@ echo "Opening trace in Perfetto UI"
 echo "Visit https://ui.perfetto.dev/ and open the .pftrace file"
 ```
 
+Example output (ROCm 6.4):
+
+```
+Detected ROCm version: 6.4.4-129
+Starting rocprofv3 runtime trace profiling for pytorch_microbench...
+Output directory: profiling_results/trace_20260114_151142
+Using ROCm 6.x/7.x: --output-format pftrace (generates Perfetto trace)
+
+Collecting full runtime trace (HIP/HSA API calls, kernels, memory operations)
+
+INFO: running forward and backward for warmup.
+INFO: running the benchmark..
+OK: finished running benchmark..
+...
+Profiling complete! Results saved to: profiling_results/trace_20260114_151142
+
+Generated files:
+total 25M
+-rw-r--r-- 1 root root 25M Jan 14 15:11 5712_results.pftrace
+
+Perfetto trace file found: profiling_results/trace_20260114_151142/.../5712_results.pftrace
+Size: 25M
+
+To view the trace:
+  1. Visit: https://ui.perfetto.dev/
+  2. Open: profiling_results/trace_20260114_151142/.../5712_results.pftrace
+```
+
 If a `.db` file is generated instead (ROCm 7.x without --output-format):
 
 ```
 echo "Converting database to Perfetto format"
 rocpd2pftrace -i <db_file> -o trace.pftrace
 ```
-
-<!-- Example output placeholder: Perfetto timeline screenshot showing kernel execution -->
 
 ## Kernel Trace Profiling with get_counters.sh
 
@@ -95,7 +136,27 @@ echo "Collecting kernel trace with rocprofv3"
 ./get_counters.sh
 ```
 
-The script will output results to `profiling_results/counters_<timestamp>/`. To analyze the results:
+The script will output results to `profiling_results/counters_<timestamp>/`.
+
+Example output (ROCm 6.4):
+
+```
+Detected ROCm version: 6.4.4-129
+Starting rocprofv3 kernel trace collection for pytorch_microbench...
+Output directory: profiling_results/counters_20260114_151213
+...
+Profiling complete! Results saved to: profiling_results/counters_20260114_151213
+
+Generated files:
+total 8.6M
+-rw-r--r-- 1 root root 1.6K Jan 14 15:12 5864_agent_info.csv
+-rw-r--r-- 1 root root 8.5M Jan 14 15:12 5864_kernel_trace.csv
+
+To analyze results:
+  Check profiling_results/counters_20260114_151213 for output files
+```
+
+ROCm 6.x outputs CSV files directly, while ROCm 7.x outputs SQLite databases. For ROCm 7.x database files, use rocpd tools:
 
 ```
 echo "Exporting kernel statistics to CSV"
@@ -107,9 +168,29 @@ echo "Getting kernel summary"
 rocpd summary -i <db_file> --region-categories KERNEL
 ```
 
-Documentation for rocpd tools: https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/develop/how-to/using-rocpd-output-format.html
+Example kernel analysis (ResNet50, 10 iterations):
 
-<!-- Example output placeholder: Kernel summary table showing top kernels by execution time -->
+```
+Total kernels: 21175
+Unique kernels: 68
+Total GPU time: 2080.62 ms
+
+Kernel Name                                                     Count    Total(ms)      Avg(us)    %Time
+--------------------------------------------------------------------------------------------------------
+miopenSp3AsmConv_v30_3_1_gfx11_fp32_f2x3_stride1                  732      760.707     1039.217    36.6%
+MIOpenBatchNormBwdSpatial                                         636      168.497      264.932     8.1%
+void at::native::vectorized_elementwise_kernel<4, at::nati...     384      120.959      314.997     5.8%
+void at::native::vectorized_elementwise_kernel<4, at::nati...     588       96.744      164.530     4.6%
+Cijk_Alik_Bljk_SB_MT64x64x8_SN_1LDSB0_APM1_ABV0_ACED0_AF0E...    2304       88.475       38.401     4.3%
+MIOpenBatchNormFwdTrainSpatial                                    480       73.505      153.136     3.5%
+Cijk_Alik_Bljk_SB_MT16x16x16_SN_1LDSB0_APM1_ABV0_ACED0_AF0...     768       70.635       91.973     3.4%
+miopenSp3AsmConv_v30_3_1_gfx11_fp32_f3x2_stride1                  108       48.377      447.933     2.3%
+...
+```
+
+The top kernels show MIOpen convolutions (`miopenSp3AsmConv`) and batch normalization (`MIOpenBatchNorm`) dominate execution time, which is expected for ResNet50.
+
+Documentation for rocpd tools: https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/develop/how-to/using-rocpd-output-format.html
 
 ## GPU Hardware Metrics with get_rocprof_compute.sh
 
@@ -135,7 +216,7 @@ For available analysis options:
 rocprof-compute analyze --help
 ```
 
-<!-- Example output placeholder: rocprof-compute analysis report sections -->
+Note: rocprof-compute requires data center GPUs (MI100, MI200, MI300 series) for full hardware counter support. Consumer GPUs may have limited counter availability.
 
 ## System-Level Profiling with get_rocprof_sys.sh
 
@@ -155,7 +236,7 @@ echo "Opening trace in Perfetto UI"
 echo "Visit https://ui.perfetto.dev/ and open the .proto file"
 ```
 
-<!-- Example output placeholder: Perfetto system trace screenshot -->
+Note: rocprof-sys may produce memory map dumps in some configurations. If profiling fails or produces excessive output, consider using rocprofv3 (get_trace.sh) instead.
 
 ## Performance Tuning
 
